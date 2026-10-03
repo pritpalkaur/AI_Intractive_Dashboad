@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interactive Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Interactive Dashboard</h1>
+    <div class="status" id="status"><span class="dot"></span><span id="status-text">Loading…</span></div>
+  </header>
+
+  <main>
+    <section class="panel chart-panel">
+      <div class="panel-head">
+        <h2>Product Prices</h2>
+        <div class="actions">
+          <button id="discard-btn" class="secondary" disabled>Discard changes</button>
+          <button id="save-btn" disabled>Save data</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <table id="data-table">
+        <thead><tr><th>Product</th><th>Saved price</th><th>Current price</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel chat-panel">
+      <h2>Assistant</h2>
+      <div id="messages"></div>
+      <form id="chat-form">
+        <input id="chat-input" autocomplete="off" placeholder="e.g. set keyboard to 79.99">
+        <button type="submit">Send</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
