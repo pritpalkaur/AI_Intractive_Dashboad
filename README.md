@@ -51,6 +51,8 @@ npm run dev                 # http://localhost:3000 (calls to /api are forwarded
 
 ## API
 
+Interactive docs (Swagger UI): **http://localhost:5000/api/docs** — log in with POST /api/auth/login, click **Authorize**, and paste the token. The raw OpenAPI spec is at /api/openapi.json.
+
 | Method | Path | Body | Result |
 |---|---|---|---|
 | POST | `/api/auth/login` | `{ email, password }` | `{ ok, token, user: { id, email, name } }` |

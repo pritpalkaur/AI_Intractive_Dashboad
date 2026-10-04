@@ -1,5 +1,7 @@
 // Express routes. Data access and mail are injected so the routes can be tested without SQL Server/SMTP.
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const openapi = require('./openapi');
 const { validateSaveRequest, ValidationError, normalizeEmail } = require('./validate');
 const { checkPassword, signToken, requireAuth } = require('./auth');
 
@@ -8,6 +10,10 @@ function createApp({ readProducts, saveProducts, findUserByEmail, sendSaveEmail,
 
   const app = express();
   app.use(express.json({ limit: '1mb' }));
+
+  // API documentation and test page (Swagger UI).
+  app.get('/api/openapi.json', (req, res) => res.json(openapi));
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapi, { swaggerOptions: { persistAuthorization: true } }));
 
   app.post('/api/auth/login', async (req, res) => {
     const email = normalizeEmail(req.body?.email);

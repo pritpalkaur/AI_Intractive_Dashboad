@@ -43,7 +43,7 @@ async function start({ mailFails = false } = {}) {
     body: body && JSON.stringify(body),
   }).then(async r => ({ status: r.status, body: await r.json() }));
   const login = async () => (await call('/api/auth/login', { body: { email: 'Priti@Gmail.com ', password: PASSWORD } })).body.token;
-  return { call, login, sent, close: () => server.close() };
+  return { base, call, login, sent, close: () => server.close() };
 }
 
 test('login returns a JWT for valid credentials', async t => {
@@ -122,6 +122,17 @@ test('rejects invalid save requests', async t => {
     assert.strictEqual(body.ok, false);
   }
   assert.strictEqual(s.sent.length, 0);
+});
+
+test('Swagger UI and OpenAPI spec are served without a token', async t => {
+  const s = await start(); t.after(s.close);
+  const spec = await s.call('/api/openapi.json');
+  assert.strictEqual(spec.status, 200);
+  assert.strictEqual(spec.body.openapi, '3.0.3');
+  assert.deepStrictEqual(Object.keys(spec.body.paths).sort(), ['/api/auth/login', '/api/products', '/api/products/save']);
+  const page = await fetch(s.base + '/api/docs/');
+  assert.strictEqual(page.status, 200);
+  assert.match(await page.text(), /swagger-ui/);
 });
 
 test('save email lists old and new prices and escapes HTML', () => {
