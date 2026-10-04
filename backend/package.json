@@ -1,0 +1,24 @@
+{
+  "name": "ai-interactive-dashboard-backend",
+  "version": "1.0.0",
+  "description": "REST API for the interactive dashboard: reads/saves product prices in SQL Server and emails a summary on save",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js",
+    "migrate": "node --env-file=.env src/migrate.js",
+    "create-user": "node --env-file=.env src/createUser.js",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mssql": "^12.7.2",
+    "nodemailer": "^10.0.14"
+  }
+}

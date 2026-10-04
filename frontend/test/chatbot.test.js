@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert');
-const { runCommand } = require('../public/app.js');
+import test from 'node:test';
+import assert from 'node:assert';
+import { runCommand } from '../src/chatbot.js';
 
 const base = [
   { id: 15, label: 'Wireless Mouse - Black', value: 24.99 },

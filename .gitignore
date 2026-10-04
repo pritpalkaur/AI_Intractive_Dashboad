@@ -2,3 +2,4 @@ node_modules/
 dashboard.db
 dashboard.db-*
 .env
+dist/
