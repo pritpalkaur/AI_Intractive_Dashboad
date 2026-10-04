@@ -27,7 +27,7 @@ Requires Node.js 20.6+ and SQL Server with a `dbo.Products (Id, Name, Price deci
 cd backend
 npm install
 copy .env.example .env      # then fill in DB and SMTP settings
-npm run migrate             # one time: adds IsUpdated / UpdatedAt to dbo.Products and creates dbo.Users
+npm run migrate             # one time: adds IsUpdated / UpdatedAt to dbo.Products and creates dbo.DashboardUsers
 npm run create-user -- --email someone@gmail.com --name "Some One" --password "at-least-8-chars"
 npm start                   # http://localhost:5000
 ```

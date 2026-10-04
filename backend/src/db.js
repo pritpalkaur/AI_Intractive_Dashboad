@@ -55,7 +55,7 @@ const toUser = r => ({ id: r.Id, email: r.Email, name: r.Name, passwordHash: r.P
 async function findUserByEmail(email) {
   const result = await pool.request()
     .input('email', sql.NVarChar(254), email)
-    .query('SELECT Id, Email, Name, PasswordHash FROM dbo.Users WHERE Email = @email');
+    .query('SELECT Id, Email, Name, PasswordHash FROM dbo.DashboardUsers WHERE Email = @email');
   return result.recordset[0] ? toUser(result.recordset[0]) : null;
 }
 
@@ -66,7 +66,7 @@ async function createUser({ email, name, passwordHash }) {
       .input('email', sql.NVarChar(254), email)
       .input('name', sql.NVarChar(100), name)
       .input('hash', sql.NVarChar(100), passwordHash)
-      .query(`INSERT INTO dbo.Users (Email, Name, PasswordHash) VALUES (@email, @name, @hash);
+      .query(`INSERT INTO dbo.DashboardUsers (Email, Name, PasswordHash) VALUES (@email, @name, @hash);
               SELECT CAST(SCOPE_IDENTITY() AS INT) AS Id;`);
     return { id: result.recordset[0].Id, email, name };
   } catch (err) {
