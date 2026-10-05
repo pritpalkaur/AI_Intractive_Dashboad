@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const BCRYPT_ROUNDS = 12;
-const MIN_PASSWORD_LENGTH = 8;
 // Compared against when the email is unknown, so a login takes the same time whether or not the user exists.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS);
 
@@ -35,4 +34,4 @@ function requireAuth(secret) {
   };
 }
 
-module.exports = { hashPassword, checkPassword, signToken, requireAuth, MIN_PASSWORD_LENGTH };
+module.exports = { hashPassword, checkPassword, signToken, requireAuth };

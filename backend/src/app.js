@@ -2,10 +2,13 @@
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const openapi = require('./openapi');
-const { validateSaveRequest, ValidationError, normalizeEmail } = require('./validate');
-const { checkPassword, signToken, requireAuth } = require('./auth');
+const { validateSaveRequest, validateNewUser, ValidationError, normalizeEmail } = require('./validate');
+const { hashPassword, checkPassword, signToken, requireAuth } = require('./auth');
 
-function createApp({ readProducts, saveProducts, findUserByEmail, sendSaveEmail, jwtSecret, jwtExpiresIn }) {
+function createApp({
+  readProducts, saveProducts, findUserByEmail, createUser, sendSaveEmail, sendWelcomeEmail,
+  jwtSecret, jwtExpiresIn, appUrl = 'http://localhost:3000',
+}) {
   if (!jwtSecret) throw new Error('JWT_SECRET is not set');
 
   const app = express();
@@ -14,6 +17,37 @@ function createApp({ readProducts, saveProducts, findUserByEmail, sendSaveEmail,
   // API documentation and test page (Swagger UI).
   app.get('/api/openapi.json', (req, res) => res.json(openapi));
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapi, { swaggerOptions: { persistAuthorization: true } }));
+
+  // Registers a new account, emails a welcome message, and logs the user in (returns a JWT).
+  app.post('/api/auth/signup', async (req, res) => {
+    let input;
+    try {
+      input = validateNewUser(req.body);
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
+
+    let user;
+    try {
+      user = await createUser({ email: input.email, name: input.name, passwordHash: await hashPassword(input.password) });
+    } catch (err) {
+      if (err.code === 'DUPLICATE_EMAIL') return res.status(409).json({ ok: false, error: 'An account with this email already exists' });
+      console.error(err);
+      return res.status(500).json({ ok: false, error: 'Could not create account' });
+    }
+
+    // The account already exists, so an email problem is reported but does not fail the signup.
+    let email;
+    try {
+      const { sent } = await sendWelcomeEmail(user, appUrl, { selfSignup: true });
+      email = { to: user.email, sent, error: sent ? null : 'SMTP is not configured on the server (email logged to console)' };
+    } catch (err) {
+      console.error(err);
+      email = { to: user.email, sent: false, error: `Email failed: ${err.message}` };
+    }
+
+    res.status(201).json({ ok: true, token: signToken(user, jwtSecret, jwtExpiresIn), user, email });
+  });
 
   app.post('/api/auth/login', async (req, res) => {
     const email = normalizeEmail(req.body?.email);

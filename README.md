@@ -7,7 +7,7 @@ A website that charts product prices from SQL Server, with a chatbot that can ch
 
 ## How it works
 
-0. Users sign in with email and password. The backend returns a JWT (valid for 8 hours by default) and every `/api/products` request must send it as `Authorization: Bearer <token>`.
+0. Users register with POST /api/auth/signup (or an admin runs `npm run create-user`), then sign in with email and password. The backend returns a JWT (valid for 8 hours by default) and every `/api/products` request must send it as `Authorization: Bearer <token>`.
 1. The chatbot changes prices (`set keyboard to 79.99`). The chart redraws right away, and changed bars turn orange.
 2. Changes are kept **in memory only** in the browser. The header shows "Unsaved changes".
 3. Clicking **Save data** (or typing `save`) sends only the changed prices to the backend, which in one transaction:
@@ -51,10 +51,11 @@ npm run dev                 # http://localhost:3000 (calls to /api are forwarded
 
 ## API
 
-Interactive docs (Swagger UI): **http://localhost:5000/api/docs** — log in with POST /api/auth/login, click **Authorize**, and paste the token. The raw OpenAPI spec is at /api/openapi.json.
+Interactive docs (Swagger UI): **http://localhost:5000/api/docs** — sign up with POST /api/auth/signup or log in with POST /api/auth/login, click **Authorize**, and paste the token. The raw OpenAPI spec is at /api/openapi.json.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
+| POST | `/api/auth/signup` | `{ email, name, password }` | `201 { ok, token, user, email: { to, sent, error } }` — sends a welcome email |
 | POST | `/api/auth/login` | `{ email, password }` | `{ ok, token, user: { id, email, name } }` |
 | GET | `/api/products` 🔒 | – | `{ ok, data: [{ id, label, value, isUpdated, updatedAt }] }` |
 | POST | `/api/products/save` 🔒 | `{ data: [{ id, label, value }] }` | `{ ok, savedAt, changes, email: { to, sent, error }, data }` |

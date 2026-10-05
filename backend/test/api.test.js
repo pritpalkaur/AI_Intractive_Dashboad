@@ -21,6 +21,17 @@ async function start({ mailFails = false } = {}) {
   const app = createApp({
     jwtSecret: SECRET,
     findUserByEmail: async email => users.find(u => u.email === email) || null,
+    createUser: async ({ email, name, passwordHash: hash }) => {
+      if (users.some(u => u.email === email)) throw Object.assign(new Error('duplicate'), { code: 'DUPLICATE_EMAIL' });
+      const user = { id: users.length + 100, email, name, passwordHash: hash };
+      users.push(user);
+      return { id: user.id, email, name };
+    },
+    sendWelcomeEmail: async (user, loginUrl, options) => {
+      if (mailFails) throw new Error('SMTP down');
+      sent.push({ to: user.email, welcome: true, options });
+      return { sent: true };
+    },
     readProducts: async () => products.map(p => ({ ...p })),
     saveProducts: async items => items.map(it => {
       const p = products.find(x => x.id === it.id);
@@ -45,6 +56,50 @@ async function start({ mailFails = false } = {}) {
   const login = async () => (await call('/api/auth/login', { body: { email: 'Priti@Gmail.com ', password: PASSWORD } })).body.token;
   return { base, call, login, sent, close: () => server.close() };
 }
+
+test('signup creates an account, sends a welcome email and returns a working JWT', async t => {
+  const s = await start(); t.after(s.close);
+  const { status, body } = await s.call('/api/auth/signup', { body: { email: ' New@Gmail.com', name: ' New User ', password: 'new-password' } });
+  assert.strictEqual(status, 201);
+  assert.deepStrictEqual(body.user, { id: 101, email: 'new@gmail.com', name: 'New User' });
+  assert.deepStrictEqual(body.email, { to: 'new@gmail.com', sent: true, error: null });
+  assert.deepStrictEqual(s.sent, [{ to: 'new@gmail.com', welcome: true, options: { selfSignup: true } }]);
+  assert.strictEqual((await s.call('/api/products', { token: body.token })).status, 200);
+
+  // The same credentials work with login.
+  const login = await s.call('/api/auth/login', { body: { email: 'new@gmail.com', password: 'new-password' } });
+  assert.strictEqual(login.status, 200);
+  assert.strictEqual(login.body.user.id, 101);
+});
+
+test('signup rejects duplicate emails and invalid input', async t => {
+  const s = await start(); t.after(s.close);
+  const dup = await s.call('/api/auth/signup', { body: { email: 'PRITI@gmail.com', name: 'Someone', password: 'whatever-123' } });
+  assert.strictEqual(dup.status, 409);
+  for (const bad of [
+    {},
+    { email: 'not-an-email', name: 'A', password: 'long-enough' },
+    { email: 'a@gmail.com', name: '  ', password: 'long-enough' },
+    { email: 'a@gmail.com', name: 'x'.repeat(101), password: 'long-enough' },
+    { email: 'a@gmail.com', name: 'A', password: 'short' },
+    { email: 'a@gmail.com', name: 'A', password: 'x'.repeat(73) },
+    { email: 'a@gmail.com', name: 'A', password: 12345678 },
+  ]) {
+    const { status, body } = await s.call('/api/auth/signup', { body: bad });
+    assert.strictEqual(status, 400, JSON.stringify(bad));
+    assert.strictEqual(body.ok, false);
+  }
+  assert.strictEqual(s.sent.length, 0);
+});
+
+test('signup succeeds even if the welcome email fails', async t => {
+  const s = await start({ mailFails: true }); t.after(s.close);
+  const { status, body } = await s.call('/api/auth/signup', { body: { email: 'b@gmail.com', name: 'B', password: 'long-enough' } });
+  assert.strictEqual(status, 201);
+  assert.ok(body.token);
+  assert.strictEqual(body.email.sent, false);
+  assert.match(body.email.error, /SMTP down/);
+});
 
 test('login returns a JWT for valid credentials', async t => {
   const s = await start(); t.after(s.close);
@@ -129,7 +184,7 @@ test('Swagger UI and OpenAPI spec are served without a token', async t => {
   const spec = await s.call('/api/openapi.json');
   assert.strictEqual(spec.status, 200);
   assert.strictEqual(spec.body.openapi, '3.0.3');
-  assert.deepStrictEqual(Object.keys(spec.body.paths).sort(), ['/api/auth/login', '/api/products', '/api/products/save']);
+  assert.deepStrictEqual(Object.keys(spec.body.paths).sort(), ['/api/auth/login', '/api/auth/signup', '/api/products', '/api/products/save']);
   const page = await fetch(s.base + '/api/docs/');
   assert.strictEqual(page.status, 200);
   assert.match(await page.text(), /swagger-ui/);
@@ -148,4 +203,11 @@ test('welcome email has login details but no password', () => {
   assert.match(mail.text, /http:\/\/localhost:3000/);
   assert.match(mail.html, /&lt;Priti&gt;/);
   assert.doesNotMatch(mail.text, /correct-horse/);
+});
+
+test('self-signup welcome email does not say the password will be sent separately', () => {
+  const mail = buildWelcomeEmail({ email: 'a@gmail.com', name: 'A' }, 'http://localhost:3000', { selfSignup: true });
+  assert.match(mail.text, /Thanks for signing up/);
+  assert.match(mail.text, /password you chose/);
+  assert.doesNotMatch(mail.text, /given to you separately/);
 });

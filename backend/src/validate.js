@@ -25,4 +25,19 @@ function validateSaveRequest(body) {
   return { items: normalized };
 }
 
-module.exports = { validateSaveRequest, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE };
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_BYTES = 72; // bcrypt ignores anything after 72 bytes
+
+// Throws a ValidationError for the first problem with a new account. Returns the normalized { email, name, password }.
+function validateNewUser({ email, name, password } = {}) {
+  email = normalizeEmail(email);
+  name = String(name ?? '').trim();
+  password = typeof password === 'string' ? password : '';
+  if (!isValidEmail(email)) throw new ValidationError('A valid email is required');
+  if (!name || name.length > 100) throw new ValidationError('Name is required (max 100 characters)');
+  if (password.length < MIN_PASSWORD_LENGTH) throw new ValidationError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  if (Buffer.byteLength(password) > MAX_PASSWORD_BYTES) throw new ValidationError(`Password must be at most ${MAX_PASSWORD_BYTES} bytes`);
+  return { email, name, password };
+}
+
+module.exports = { validateSaveRequest, validateNewUser, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE };

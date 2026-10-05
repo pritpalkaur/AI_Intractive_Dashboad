@@ -2,9 +2,9 @@
 // Usage: npm run create-user -- --email someone@gmail.com --name "Some One" --password "secret123"
 const { parseArgs } = require('node:util');
 const { pool, createUser } = require('./db');
-const { hashPassword, MIN_PASSWORD_LENGTH } = require('./auth');
+const { hashPassword } = require('./auth');
 const { sendWelcomeEmail } = require('./mailer');
-const { normalizeEmail, isValidEmail } = require('./validate');
+const { validateNewUser } = require('./validate');
 
 const USAGE = 'Usage: npm run create-user -- --email someone@gmail.com --name "Some One" --password "secret123"';
 
@@ -12,13 +12,12 @@ const USAGE = 'Usage: npm run create-user -- --email someone@gmail.com --name "S
   const { values } = parseArgs({
     options: { email: { type: 'string' }, name: { type: 'string' }, password: { type: 'string' } },
   });
-  const email = normalizeEmail(values.email);
-  const name = (values.name || '').trim();
-  const password = values.password || '';
-
-  if (!isValidEmail(email)) throw new Error(`A valid --email is required.\n${USAGE}`);
-  if (!name || name.length > 100) throw new Error(`--name is required (max 100 characters).\n${USAGE}`);
-  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`--password must be at least ${MIN_PASSWORD_LENGTH} characters.\n${USAGE}`);
+  let email, name, password;
+  try {
+    ({ email, name, password } = validateNewUser(values));
+  } catch (err) {
+    throw new Error(`${err.message}.\n${USAGE}`);
+  }
 
   await pool.connect();
   const user = await createUser({ email, name, passwordHash: await hashPassword(password) });

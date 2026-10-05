@@ -29,17 +29,24 @@ function buildSaveEmail(changes, savedAt) {
   };
 }
 
-// Sent when an account is created. The password is not included; share it with the user separately.
-function buildWelcomeEmail(user, loginUrl) {
+// Sent when an account is created. The password is never included.
+// selfSignup: true when the user registered themselves (they already know their password).
+function buildWelcomeEmail(user, loginUrl, { selfSignup = false } = {}) {
+  const intro = selfSignup
+    ? 'Thanks for signing up for the Interactive Dashboard. Your account is ready.'
+    : 'An account has been created for you on the Interactive Dashboard.';
+  const passwordNote = selfSignup
+    ? 'Sign in with the password you chose when you signed up.'
+    : 'Your password will be given to you separately.';
   return {
     subject: 'Your Interactive Dashboard account',
-    text: `Hi ${user.name},\n\nAn account has been created for you on the Interactive Dashboard.\n\n`
+    text: `Hi ${user.name},\n\n${intro}\n\n`
       + `Login email: ${user.email}\nSign in at: ${loginUrl}\n\n`
-      + 'Your password will be given to you separately.\n',
+      + `${passwordNote}\n`,
     html: `<p>Hi ${escapeHtml(user.name)},</p>
-<p>An account has been created for you on the Interactive Dashboard.</p>
+<p>${intro}</p>
 <p>Login email: <b>${escapeHtml(user.email)}</b><br>Sign in at: <a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></p>
-<p>Your password will be given to you separately.</p>`,
+<p>${passwordNote}</p>`,
   };
 }
 
@@ -54,6 +61,6 @@ async function send(to, message) {
 }
 
 const sendSaveEmail = (to, changes, savedAt) => send(to, buildSaveEmail(changes, savedAt));
-const sendWelcomeEmail = (user, loginUrl) => send(user.email, buildWelcomeEmail(user, loginUrl));
+const sendWelcomeEmail = (user, loginUrl, options) => send(user.email, buildWelcomeEmail(user, loginUrl, options));
 
 module.exports = { buildSaveEmail, buildWelcomeEmail, sendSaveEmail, sendWelcomeEmail };

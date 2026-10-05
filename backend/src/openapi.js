@@ -9,7 +9,7 @@ module.exports = {
   info: {
     title: 'Interactive Dashboard API',
     version: '1.0.0',
-    description: 'To try the protected endpoints: call **POST /api/auth/login**, copy the `token` from the response, '
+    description: 'To try the protected endpoints: call **POST /api/auth/signup** (new account) or **POST /api/auth/login**, copy the `token` from the response, '
       + 'click **Authorize** and paste it in.\n\n'
       + '⚠️ **POST /api/products/save** changes real prices in the database and sends an email.',
   },
@@ -51,6 +51,57 @@ module.exports = {
     },
   },
   paths: {
+    '/api/auth/signup': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Register a new account (also logs you in)',
+        description: 'Creates the account, emails a welcome message, and returns a JWT like login does. '
+          + 'If the welcome email fails the account is still created and `email.error` says why.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'name', 'password'],
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'someone@gmail.com' },
+                  name: { type: 'string', maxLength: 100, example: 'Some One' },
+                  password: { type: 'string', format: 'password', minLength: 8, example: 'at-least-8-chars' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Account created. Use `token` as the Bearer token.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok: { type: 'boolean', example: true },
+                    token: { type: 'string' },
+                    user: { $ref: '#/components/schemas/User' },
+                    email: {
+                      type: 'object',
+                      properties: {
+                        to: { type: 'string', format: 'email' },
+                        sent: { type: 'boolean' },
+                        error: { type: 'string', nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: error('Invalid email, name or password'),
+          409: error('An account with this email already exists'),
+        },
+      },
+    },
     '/api/auth/login': {
       post: {
         tags: ['Auth'],
