@@ -101,3 +101,7 @@ tr.changed td { color: var(--changed); font-weight: 600; }
 .login-panel label { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--muted); }
 .login-panel input { padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; color: var(--text); }
 .login-panel .msg { max-width: none; }
+
+.login-panel .hint { font-size: 0.8rem; }
+.switch-mode { margin: 0; text-align: center; font-size: 0.9rem; color: var(--muted); }
+button.link { background: none; color: var(--accent); padding: 0; font-size: inherit; text-decoration: underline; }

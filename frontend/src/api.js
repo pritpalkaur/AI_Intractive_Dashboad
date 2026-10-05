@@ -22,6 +22,9 @@ async function request(url, { token, body } = {}) {
 // Returns { token, user: { id, email, name } }.
 export const login = (email, password) => request('/api/auth/login', { body: { email, password } });
 
+// Creates an account and logs in. Returns { token, user, email: { to, sent, error } } (welcome email status).
+export const signup = (email, name, password) => request('/api/auth/signup', { body: { email, name, password } });
+
 export const fetchProducts = token => request('/api/products', { token }).then(b => b.data);
 
 // items: only the products whose price changed. The summary email goes to the logged-in user.

@@ -11,7 +11,7 @@ import StatusBar from './components/StatusBar.jsx';
 
 let nextId = 0; // chat message keys
 
-export default function Dashboard({ session, onLogout }) {
+export default function Dashboard({ session, greeting, onLogout }) {
   const { token, user } = session;
   const [saved, setSaved] = useState([]);
   const [working, setWorking] = useState([]);
@@ -35,6 +35,7 @@ export default function Dashboard({ session, onLogout }) {
         if (cancelled) return;
         setSaved(data);
         setWorking(data);
+        if (greeting) say(greeting, 'bot', /not sent/.test(greeting));
         say(`Hi ${user.name}! Changes you make are kept in memory until you save.\n\n` + HELP_TEXT);
       })
       .catch(err => {
@@ -44,7 +45,7 @@ export default function Dashboard({ session, onLogout }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token, user.name, say, onLogout]);
+  }, [token, user.name, greeting, say, onLogout]);
 
   // Warn before leaving the page with unsaved changes.
   useEffect(() => {

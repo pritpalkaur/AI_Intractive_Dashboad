@@ -27,10 +27,12 @@ function writeSession(session) {
 export default function App() {
   const [session, setSession] = useState(readSession);
   const [notice, setNotice] = useState('');
+  const [greeting, setGreeting] = useState(''); // extra message for the assistant after sign-up
 
-  function handleLogin(newSession) {
+  function handleLogin(newSession, newGreeting = '') {
     writeSession(newSession);
     setNotice('');
+    setGreeting(newGreeting);
     setSession(newSession);
   }
 
@@ -41,5 +43,5 @@ export default function App() {
   }, []);
 
   if (!session) return <LoginPage onLogin={handleLogin} notice={notice} />;
-  return <Dashboard key={session.token} session={session} onLogout={handleLogout} />;
+  return <Dashboard key={session.token} session={session} greeting={greeting} onLogout={handleLogout} />;
 }
