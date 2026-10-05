@@ -77,4 +77,47 @@ async function createUser({ email, name, passwordHash }) {
   }
 }
 
-module.exports = { pool, readProducts, saveProducts, findUserByEmail, createUser };
+// Stores a new reset token hash for the user and cancels any earlier unused ones, so only the latest link works.
+async function createPasswordReset(userId, tokenHash, expiresAt) {
+  await pool.request()
+    .input('userId', sql.Int, userId)
+    .input('hash', sql.Char(64), tokenHash)
+    .input('expiresAt', sql.DateTime2, expiresAt)
+    .query(`UPDATE dbo.PasswordResets SET UsedAt = SYSUTCDATETIME() WHERE UserId = @userId AND UsedAt IS NULL;
+            INSERT INTO dbo.PasswordResets (UserId, TokenHash, ExpiresAt) VALUES (@userId, @hash, @expiresAt);`);
+}
+
+// If the token is unused and not expired, sets the new password hash and marks the token used.
+// Returns the user ({ id, email, name }) or null if the token is invalid.
+async function resetPassword(tokenHash, passwordHash) {
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    const found = await new sql.Request(tx)
+      .input('hash', sql.Char(64), tokenHash)
+      .query(`SELECT r.Id, u.Id AS UserId, u.Email, u.Name
+              FROM dbo.PasswordResets r WITH (UPDLOCK)
+              JOIN dbo.DashboardUsers u ON u.Id = r.UserId
+              WHERE r.TokenHash = @hash AND r.UsedAt IS NULL AND r.ExpiresAt > SYSUTCDATETIME()`);
+    const row = found.recordset[0];
+    if (!row) {
+      await tx.rollback();
+      return null;
+    }
+    await new sql.Request(tx)
+      .input('id', sql.Int, row.Id)
+      .input('userId', sql.Int, row.UserId)
+      .input('pw', sql.NVarChar(100), passwordHash)
+      .query(`UPDATE dbo.DashboardUsers SET PasswordHash = @pw WHERE Id = @userId;
+              UPDATE dbo.PasswordResets SET UsedAt = SYSUTCDATETIME() WHERE Id = @id;`);
+    await tx.commit();
+    return { id: row.UserId, email: row.Email, name: row.Name };
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+}
+
+module.exports = {
+  pool, readProducts, saveProducts, findUserByEmail, createUser, createPasswordReset, resetPassword,
+};

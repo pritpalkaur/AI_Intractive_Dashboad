@@ -2,11 +2,17 @@
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const openapi = require('./openapi');
-const { validateSaveRequest, validateNewUser, ValidationError, normalizeEmail } = require('./validate');
-const { hashPassword, checkPassword, signToken, requireAuth } = require('./auth');
+const {
+  validateSaveRequest, validateNewUser, validatePassword, ValidationError, normalizeEmail, isValidEmail,
+} = require('./validate');
+const { hashPassword, checkPassword, signToken, requireAuth, createResetToken, hashResetToken } = require('./auth');
+
+const RESET_TOKEN_MINUTES = 30;
+const FORGOT_PASSWORD_REPLY = 'If an account exists for that email, a password reset link has been sent to it.';
 
 function createApp({
-  readProducts, saveProducts, findUserByEmail, createUser, sendSaveEmail, sendWelcomeEmail,
+  readProducts, saveProducts, findUserByEmail, createUser, createPasswordReset, resetPassword,
+  sendSaveEmail, sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail,
   jwtSecret, jwtExpiresIn, appUrl = 'http://localhost:3000',
 }) {
   if (!jwtSecret) throw new Error('JWT_SECRET is not set');
@@ -64,6 +70,53 @@ function createApp({
     } catch (err) {
       console.error(err);
       res.status(500).json({ ok: false, error: 'Could not log in' });
+    }
+  });
+
+  // Emails a one-time reset link. The reply is the same whether or not the account exists,
+  // so this endpoint cannot be used to find out which emails are registered.
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    if (!isValidEmail(email)) return res.status(400).json({ ok: false, error: 'A valid email is required' });
+    try {
+      const user = await findUserByEmail(email);
+      if (user) {
+        const { token, tokenHash } = createResetToken();
+        await createPasswordReset(user.id, tokenHash, new Date(Date.now() + RESET_TOKEN_MINUTES * 60 * 1000));
+        const resetUrl = `${appUrl.replace(/\/$/, '')}/?reset=${token}`;
+        try {
+          await sendPasswordResetEmail(user, resetUrl, RESET_TOKEN_MINUTES);
+        } catch (err) {
+          console.error(`Password reset email to ${user.email} failed:`, err.message);
+        }
+      }
+      res.json({ ok: true, message: FORGOT_PASSWORD_REPLY });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ ok: false, error: 'Could not start the password reset' });
+    }
+  });
+
+  // Sets a new password using the token from the reset email. Each token works once.
+  app.post('/api/auth/reset-password', async (req, res) => {
+    const token = req.body?.token;
+    if (typeof token !== 'string' || !/^[0-9a-f]{64}$/.test(token)) {
+      return res.status(400).json({ ok: false, error: 'This reset link is invalid or has expired' });
+    }
+    let password;
+    try {
+      password = validatePassword(req.body?.password);
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
+    try {
+      const user = await resetPassword(hashResetToken(token), await hashPassword(password));
+      if (!user) return res.status(400).json({ ok: false, error: 'This reset link is invalid or has expired' });
+      sendPasswordChangedEmail(user).catch(err => console.error(`Password changed email to ${user.email} failed:`, err.message));
+      res.json({ ok: true, message: 'Your password has been changed. You can now sign in.' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ ok: false, error: 'Could not reset the password' });
     }
   });
 

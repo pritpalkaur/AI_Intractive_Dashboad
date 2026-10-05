@@ -32,12 +32,20 @@ const MAX_PASSWORD_BYTES = 72; // bcrypt ignores anything after 72 bytes
 function validateNewUser({ email, name, password } = {}) {
   email = normalizeEmail(email);
   name = String(name ?? '').trim();
-  password = typeof password === 'string' ? password : '';
   if (!isValidEmail(email)) throw new ValidationError('A valid email is required');
   if (!name || name.length > 100) throw new ValidationError('Name is required (max 100 characters)');
-  if (password.length < MIN_PASSWORD_LENGTH) throw new ValidationError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  if (Buffer.byteLength(password) > MAX_PASSWORD_BYTES) throw new ValidationError(`Password must be at most ${MAX_PASSWORD_BYTES} bytes`);
-  return { email, name, password };
+  return { email, name, password: validatePassword(password) };
 }
 
-module.exports = { validateSaveRequest, validateNewUser, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE };
+// Throws a ValidationError unless password is a string of an allowed length. Returns it unchanged.
+function validatePassword(password) {
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+    throw new ValidationError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+  if (Buffer.byteLength(password) > MAX_PASSWORD_BYTES) throw new ValidationError(`Password must be at most ${MAX_PASSWORD_BYTES} bytes`);
+  return password;
+}
+
+module.exports = {
+  validateSaveRequest, validateNewUser, validatePassword, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE,
+};

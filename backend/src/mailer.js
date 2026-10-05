@@ -50,6 +50,31 @@ function buildWelcomeEmail(user, loginUrl, { selfSignup = false } = {}) {
   };
 }
 
+function buildPasswordResetEmail(user, resetUrl, minutes) {
+  return {
+    subject: 'Reset your Interactive Dashboard password',
+    text: `Hi ${user.name},\n\nWe received a request to reset your password. Open this link to choose a new one:\n\n`
+      + `${resetUrl}\n\nThe link works once and expires in ${minutes} minutes. `
+      + 'If you did not ask to reset your password, you can ignore this email.\n',
+    html: `<p>Hi ${escapeHtml(user.name)},</p>
+<p>We received a request to reset your password. Click the link below to choose a new one:</p>
+<p><a href="${escapeHtml(resetUrl)}">Reset my password</a></p>
+<p>The link works once and expires in ${minutes} minutes. If you did not ask to reset your password, you can ignore this email.</p>`,
+  };
+}
+
+// Sent after a password reset so the owner notices if it was not them.
+function buildPasswordChangedEmail(user) {
+  return {
+    subject: 'Your Interactive Dashboard password was changed',
+    text: `Hi ${user.name},\n\nThe password for ${user.email} was just changed. `
+      + 'If you did not do this, reset your password straight away using "Forgot password?" on the login page.\n',
+    html: `<p>Hi ${escapeHtml(user.name)},</p>
+<p>The password for <b>${escapeHtml(user.email)}</b> was just changed.</p>
+<p>If you did not do this, reset your password straight away using "Forgot password?" on the login page.</p>`,
+  };
+}
+
 async function send(to, message) {
   const info = await transport.sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_USER || 'dashboard@localhost',
@@ -63,4 +88,10 @@ async function send(to, message) {
 const sendSaveEmail = (to, changes, savedAt) => send(to, buildSaveEmail(changes, savedAt));
 const sendWelcomeEmail = (user, loginUrl, options) => send(user.email, buildWelcomeEmail(user, loginUrl, options));
 
-module.exports = { buildSaveEmail, buildWelcomeEmail, sendSaveEmail, sendWelcomeEmail };
+const sendPasswordResetEmail = (user, resetUrl, minutes) => send(user.email, buildPasswordResetEmail(user, resetUrl, minutes));
+const sendPasswordChangedEmail = user => send(user.email, buildPasswordChangedEmail(user));
+
+module.exports = {
+  buildSaveEmail, buildWelcomeEmail, buildPasswordResetEmail, buildPasswordChangedEmail,
+  sendSaveEmail, sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail,
+};

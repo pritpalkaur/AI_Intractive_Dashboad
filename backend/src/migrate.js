@@ -1,4 +1,4 @@
-// Runs db/migrate.sql: adds IsUpdated/UpdatedAt to dbo.Products and creates dbo.DashboardUsers.
+// Runs db/migrate.sql: adds IsUpdated/UpdatedAt to dbo.Products and creates dbo.DashboardUsers and dbo.PasswordResets.
 const fs = require('node:fs');
 const path = require('node:path');
 const { pool } = require('./db');
@@ -7,7 +7,7 @@ const { pool } = require('./db');
   const script = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrate.sql'), 'utf8');
   await pool.connect();
   await pool.request().batch(script);
-  console.log('Migration complete: dbo.Products has IsUpdated/UpdatedAt and dbo.DashboardUsers exists.');
+  console.log('Migration complete: dbo.Products has IsUpdated/UpdatedAt; dbo.DashboardUsers and dbo.PasswordResets exist.');
   await pool.close();
 })().catch(err => {
   console.error(`Migration failed: ${err.message}`);

@@ -105,3 +105,7 @@ tr.changed td { color: var(--changed); font-weight: 600; }
 .login-panel .hint { font-size: 0.8rem; }
 .switch-mode { margin: 0; text-align: center; font-size: 0.9rem; color: var(--muted); }
 button.link { background: none; color: var(--accent); padding: 0; font-size: inherit; text-decoration: underline; }
+
+.msg.success { background: #e3f5ea; color: #146c3c; }
+.label-row { display: flex; justify-content: space-between; align-items: baseline; }
+.label-row .link { font-size: 0.85rem; }

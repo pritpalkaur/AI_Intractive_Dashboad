@@ -1,6 +1,8 @@
 const { createApp } = require('./app');
-const { pool, readProducts, saveProducts, findUserByEmail, createUser } = require('./db');
-const { sendSaveEmail, sendWelcomeEmail } = require('./mailer');
+const {
+  pool, readProducts, saveProducts, findUserByEmail, createUser, createPasswordReset, resetPassword,
+} = require('./db');
+const { sendSaveEmail, sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail } = require('./mailer');
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,8 +16,12 @@ const app = createApp({
   saveProducts,
   findUserByEmail,
   createUser,
+  createPasswordReset,
+  resetPassword,
   sendSaveEmail,
   sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
   appUrl: process.env.APP_URL || 'http://localhost:3000',
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',

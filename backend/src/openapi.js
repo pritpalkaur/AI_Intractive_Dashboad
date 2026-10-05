@@ -102,6 +102,75 @@ module.exports = {
         },
       },
     },
+    '/api/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Email a password reset link',
+        description: 'If the email belongs to an account, a one-time link valid for 30 minutes is emailed to it. '
+          + 'The response is the same whether or not the account exists. The token is the `reset` value in the link.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: { email: { type: 'string', format: 'email', example: 'someone@gmail.com' } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Request accepted',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { ok: { type: 'boolean', example: true }, message: { type: 'string' } },
+                },
+              },
+            },
+          },
+          400: error('Invalid email'),
+        },
+      },
+    },
+    '/api/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Set a new password using the token from the reset email',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['token', 'password'],
+                properties: {
+                  token: { type: 'string', description: 'The `reset` value from the emailed link (64 hex characters)' },
+                  password: { type: 'string', format: 'password', minLength: 8, example: 'my-new-password' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Password changed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { ok: { type: 'boolean', example: true }, message: { type: 'string' } },
+                },
+              },
+            },
+          },
+          400: error('Invalid password, or the link is invalid, expired or already used'),
+        },
+      },
+    },
     '/api/auth/login': {
       post: {
         tags: ['Auth'],

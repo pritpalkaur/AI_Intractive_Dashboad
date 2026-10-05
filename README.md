@@ -7,7 +7,7 @@ A website that charts product prices from SQL Server, with a chatbot that can ch
 
 ## How it works
 
-0. Users register with POST /api/auth/signup (or an admin runs `npm run create-user`), then sign in with email and password. The backend returns a JWT (valid for 8 hours by default) and every `/api/products` request must send it as `Authorization: Bearer <token>`.
+0. Users register with POST /api/auth/signup (or an admin runs `npm run create-user`), then sign in with email and password. **Forgot password?** on the login page emails a one-time reset link (valid 30 minutes). The backend returns a JWT (valid for 8 hours by default) and every `/api/products` request must send it as `Authorization: Bearer <token>`.
 1. The chatbot changes prices (`set keyboard to 79.99`). The chart redraws right away, and changed bars turn orange.
 2. Changes are kept **in memory only** in the browser. The header shows "Unsaved changes".
 3. Clicking **Save data** (or typing `save`) sends only the changed prices to the backend, which in one transaction:
@@ -27,7 +27,7 @@ Requires Node.js 20.6+ and SQL Server with a `dbo.Products (Id, Name, Price deci
 cd backend
 npm install
 copy .env.example .env      # then fill in DB and SMTP settings
-npm run migrate             # one time: adds IsUpdated / UpdatedAt to dbo.Products and creates dbo.DashboardUsers
+npm run migrate             # adds IsUpdated / UpdatedAt to dbo.Products, creates dbo.DashboardUsers and dbo.PasswordResets
 npm run create-user -- --email someone@gmail.com --name "Some One" --password "at-least-8-chars"
 npm start                   # http://localhost:5000
 ```
@@ -56,6 +56,8 @@ Interactive docs (Swagger UI): **http://localhost:5000/api/docs** — sign up wi
 | Method | Path | Body | Result |
 |---|---|---|---|
 | POST | `/api/auth/signup` | `{ email, name, password }` | `201 { ok, token, user, email: { to, sent, error } }` — sends a welcome email |
+| POST | `/api/auth/forgot-password` | `{ email }` | `{ ok, message }` — same reply whether or not the account exists; emails a link to `APP_URL/?reset=<token>` |
+| POST | `/api/auth/reset-password` | `{ token, password }` | `{ ok, message }` — link works once; emails a "password changed" notice |
 | POST | `/api/auth/login` | `{ email, password }` | `{ ok, token, user: { id, email, name } }` |
 | GET | `/api/products` 🔒 | – | `{ ok, data: [{ id, label, value, isUpdated, updatedAt }] }` |
 | POST | `/api/products/save` 🔒 | `{ data: [{ id, label, value }] }` | `{ ok, savedAt, changes, email: { to, sent, error }, data }` |

@@ -1,5 +1,6 @@
 // Password hashing and JWT helpers. JWT_SECRET must be set in .env.
 const bcrypt = require('bcryptjs');
+const crypto = require('node:crypto');
 const jwt = require('jsonwebtoken');
 
 const BCRYPT_ROUNDS = 12;
@@ -34,4 +35,11 @@ function requireAuth(secret) {
   };
 }
 
-module.exports = { hashPassword, checkPassword, signToken, requireAuth };
+// Password reset tokens: the random token goes in the email link, only its SHA-256 hash is stored.
+const hashResetToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+function createResetToken() {
+  const token = crypto.randomBytes(32).toString('hex');
+  return { token, tokenHash: hashResetToken(token) };
+}
+
+module.exports = { hashPassword, checkPassword, signToken, requireAuth, createResetToken, hashResetToken };
