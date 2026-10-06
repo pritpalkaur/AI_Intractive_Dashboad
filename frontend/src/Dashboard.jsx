@@ -2,14 +2,17 @@
 // - saved: product prices as stored in the database (last loaded/saved)
 // - working: in-memory copy the chatbot edits; the chart always renders this
 // Changes stay in memory until the user clicks "Save data" (or tells the bot to save).
+// Chat text the rule-based parser does not understand goes to the AI assistant, which only proposes changes.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HELP_TEXT, runCommand } from './chatbot.js';
-import { AuthError, fetchProducts, saveProducts } from './api.js';
+import { AuthError, askAgent, fetchProducts, saveProducts } from './api.js';
 import ChartPanel from './components/ChartPanel.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import StatusBar from './components/StatusBar.jsx';
 
 let nextId = 0; // chat message keys
+const MAX_AI_TURNS = 20; // chat turns sent to the AI assistant (the server allows 20)
+const MAX_AI_TEXT = 2000; // characters per turn (the server allows 2000)
 
 export default function Dashboard({ session, greeting, onLogout }) {
   const { token, user } = session;
@@ -20,6 +23,8 @@ export default function Dashboard({ session, greeting, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [aiHistory, setAiHistory] = useState([]); // plain-text { role, content } turns for the AI assistant
+  const [thinking, setThinking] = useState(false); // waiting for the AI assistant
 
   const savedById = new Map(saved.map(d => [d.id, d.value]));
   const changedIds = new Set(working.filter(d => savedById.get(d.id) !== d.value).map(d => d.id));
@@ -27,6 +32,8 @@ export default function Dashboard({ session, greeting, onLogout }) {
 
   const say = useCallback((text, who = 'bot', error = false) =>
     setMessages(m => [...m, { id: nextId++, text, who, error }]), []);
+  // Replaces one message (the "Thinking…" placeholder) in place.
+  const replaceMessage = (id, fields) => setMessages(m => m.map(x => x.id === id ? { ...x, thinking: false, ...fields } : x));
 
   useEffect(() => {
     let cancelled = false;
@@ -56,15 +63,17 @@ export default function Dashboard({ session, greeting, onLogout }) {
   }, [dirty]);
 
   const savingRef = useRef(false);
-  async function save() {
-    if (!dirty) { say('Nothing to save — no changes since last save.'); return; }
+  // current: the prices to save; the AI assistant passes the list it just changed (state has not re-rendered yet).
+  async function save(current = working) {
+    // Send only changed prices so untouched products are never overwritten.
+    const changed = current.filter(d => savedById.get(d.id) !== d.value);
+    if (!changed.length) { say('Nothing to save — no changes since last save.'); return; }
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     try {
-      // Send only changed prices so untouched products are never overwritten.
-      const result = await saveProducts(token, working.filter(d => changedIds.has(d.id)));
-      const fresh = result.data ?? working;
+      const result = await saveProducts(token, changed);
+      const fresh = result.data ?? current;
       setSaved(fresh);
       setWorking(fresh);
       setHistory([]);
@@ -108,6 +117,7 @@ export default function Dashboard({ session, greeting, onLogout }) {
   function handleChat(text) {
     say(text, 'user');
     const result = runCommand(text, working);
+    if (result.unknown) return askAi(text);
     if (result.action === 'save') return save();
     if (result.action === 'discard') return discard();
     if (result.action === 'undo') return undo();
@@ -117,6 +127,48 @@ export default function Dashboard({ session, greeting, onLogout }) {
       say(result.reply + '\n(Not saved yet — click "Save data" or type "save".)');
     } else {
       say(result.reply, 'bot', result.error);
+    }
+  }
+
+  // Sends text the parser did not understand to the AI assistant and applies the changes it proposes.
+  // The chat input and the Save/Discard buttons are disabled meanwhile, so `working` cannot change under us.
+  async function askAi(text) {
+    const thinkingId = nextId++;
+    setMessages(m => [...m, { id: thinkingId, text: '🤖 Thinking…', who: 'bot', thinking: true }]);
+    setThinking(true);
+    const turns = [...aiHistory, { role: 'user', content: text }].slice(-MAX_AI_TURNS);
+    while (turns[0].role !== 'user') turns.shift(); // the conversation must start with the user
+    const products = working.map(({ id, label, value }) => ({ id, label, value, savedValue: savedById.get(id) ?? value }));
+    try {
+      const { reply, changes, action, toolCalls } = await askAgent(token, turns, products);
+      setAiHistory([...turns, { role: 'assistant', content: reply.slice(0, MAX_AI_TEXT) }].slice(-MAX_AI_TURNS));
+      const tools = [...new Set(toolCalls.map(c => c.name))];
+
+      // One history entry for the whole batch, so a single "undo" reverts it.
+      const newValues = new Map(changes.map(c => [c.id, c.value]));
+      const next = working.map(d => newValues.has(d.id) ? { ...d, value: newValues.get(d.id) } : d);
+      const changed = next.some((d, i) => d.value !== working[i].value);
+      if (changed && action !== 'undo' && action !== 'discard') {
+        setHistory(h => [...h, working]);
+        setWorking(next);
+      }
+      const note = changed && !action ? '\n(Not saved yet — click "Save data" or type "save".)' : '';
+      replaceMessage(thinkingId, { text: reply + note, tools });
+
+      if (action === 'save') await save(changed ? next : working);
+      else if (action === 'discard') discard();
+      else if (action === 'undo') undo();
+    } catch (err) {
+      if (err instanceof AuthError) {
+        replaceMessage(thinkingId, { text: err.message, error: true });
+        onLogout(err.message);
+      } else if (err.status === 503) {
+        replaceMessage(thinkingId, { text: "AI assistant is off. Type 'help' for the commands I understand." });
+      } else {
+        replaceMessage(thinkingId, { text: `AI assistant error: ${err.message}`, error: true });
+      }
+    } finally {
+      setThinking(false);
     }
   }
 
@@ -137,11 +189,12 @@ export default function Dashboard({ session, greeting, onLogout }) {
           changedIds={changedIds}
           dirty={dirty}
           saving={saving}
+          busy={thinking}
           emailTo={user.email}
-          onSave={save}
+          onSave={() => save()}
           onDiscard={discard}
         />
-        <ChatPanel messages={messages} onSend={handleChat} disabled={loading} />
+        <ChatPanel messages={messages} onSend={handleChat} disabled={loading || thinking} />
       </main>
     </>
   );

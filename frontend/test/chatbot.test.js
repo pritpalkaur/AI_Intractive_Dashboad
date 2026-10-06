@@ -46,3 +46,12 @@ test('actions and errors', () => {
   assert.strictEqual(runCommand('undo', base).action, 'undo');
   assert.ok(runCommand('blah blah', base).error);
 });
+
+test('only text no command understands is marked unknown (sent to the AI assistant)', () => {
+  const result = runCommand('Which product is the most expensive?', base);
+  assert.strictEqual(result.unknown, true);
+  assert.strictEqual(result.data, base);
+  for (const text of ['set keyboard to 5', 'set monitor to 5', 'decrease cable by 20', 'save', 'undo', 'show', 'help']) {
+    assert.ok(!runCommand(text, base).unknown, text);
+  }
+});

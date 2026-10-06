@@ -3,7 +3,7 @@ const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const openapi = require('./openapi');
 const {
-  validateSaveRequest, validateNewUser, validatePassword, ValidationError, normalizeEmail, isValidEmail,
+  validateSaveRequest, validateNewUser, validatePassword, validateAgentRequest, ValidationError, normalizeEmail, isValidEmail,
 } = require('./validate');
 const { hashPassword, checkPassword, signToken, requireAuth, createResetToken, hashResetToken } = require('./auth');
 
@@ -13,6 +13,7 @@ const FORGOT_PASSWORD_REPLY = 'If an account exists for that email, a password r
 function createApp({
   readProducts, saveProducts, findUserByEmail, createUser, createPasswordReset, resetPassword,
   sendSaveEmail, sendWelcomeEmail, sendPasswordResetEmail, sendPasswordChangedEmail,
+  agent = null, // AI assistant from agent.js; null when ANTHROPIC_API_KEY is not set
   jwtSecret, jwtExpiresIn, appUrl = 'http://localhost:3000',
 }) {
   if (!jwtSecret) throw new Error('JWT_SECRET is not set');
@@ -170,6 +171,27 @@ function createApp({
       console.error(err);
     }
     res.json({ ok: true, savedAt, changes, email, data });
+  });
+
+  // AI assistant: answers questions and proposes price changes. It never writes to the database;
+  // the browser applies the proposed changes to its in-memory prices.
+  app.use('/api/agent', requireAuth(jwtSecret));
+
+  app.post('/api/agent', async (req, res) => {
+    let request;
+    try {
+      request = validateAgentRequest(req.body);
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
+    if (!agent) return res.status(503).json({ ok: false, error: 'AI assistant is not configured on the server' });
+    try {
+      const { reply, changes, action, toolCalls } = await agent.run(request);
+      res.json({ ok: true, reply, changes, action, toolCalls });
+    } catch (err) {
+      console.error('AI assistant failed:', err);
+      res.status(500).json({ ok: false, error: 'AI assistant failed' });
+    }
   });
 
   return app;

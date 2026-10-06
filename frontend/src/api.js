@@ -15,7 +15,7 @@ async function request(url, { token, body } = {}) {
   const data = await res.json().catch(() => ({ ok: false, error: `Server returned ${res.status}` }));
   const message = data.error || `Server returned ${res.status}`;
   if (res.status === 401 && token) throw new AuthError(message);
-  if (!res.ok || !data.ok) throw new Error(message);
+  if (!res.ok || !data.ok) throw Object.assign(new Error(message), { status: res.status });
   return data;
 }
 
@@ -38,3 +38,8 @@ export const saveProducts = (token, items) => request('/api/products/save', {
   token,
   body: { data: items.map(({ id, label, value }) => ({ id, label, value })) },
 });
+
+// Asks the AI assistant. messages: [{ role, content }]; products: [{ id, label, value, savedValue }].
+// Returns { reply, changes: [{ id, value }], action, toolCalls }. Nothing is saved by this call.
+// Throws an error with status 503 when the assistant is turned off on the server.
+export const askAgent = (token, messages, products) => request('/api/agent', { token, body: { messages, products } });

@@ -11,7 +11,7 @@ let passwordHash;
 test.before(async () => { passwordHash = await hashPassword(PASSWORD); });
 
 // Starts the app with in-memory fakes for the database and mailer.
-async function start({ mailFails = false } = {}) {
+async function start({ mailFails = false, agent = null } = {}) {
   const products = [
     { id: 1, label: 'Mouse', value: 25, isUpdated: false, updatedAt: null },
     { id: 2, label: 'Keyboard', value: 89, isUpdated: false, updatedAt: null },
@@ -21,6 +21,7 @@ async function start({ mailFails = false } = {}) {
   const resets = [];
   const app = createApp({
     jwtSecret: SECRET,
+    agent,
     findUserByEmail: async email => users.find(u => u.email === email) || null,
     createUser: async ({ email, name, passwordHash: hash }) => {
       if (users.some(u => u.email === email)) throw Object.assign(new Error('duplicate'), { code: 'DUPLICATE_EMAIL' });
@@ -276,7 +277,7 @@ test('Swagger UI and OpenAPI spec are served without a token', async t => {
   const spec = await s.call('/api/openapi.json');
   assert.strictEqual(spec.status, 200);
   assert.strictEqual(spec.body.openapi, '3.0.3');
-  assert.deepStrictEqual(Object.keys(spec.body.paths).sort(), ['/api/auth/forgot-password', '/api/auth/login', '/api/auth/reset-password', '/api/auth/signup', '/api/products', '/api/products/save']);
+  assert.deepStrictEqual(Object.keys(spec.body.paths).sort(), ['/api/agent', '/api/auth/forgot-password', '/api/auth/login', '/api/auth/reset-password', '/api/auth/signup', '/api/products', '/api/products/save']);
   const page = await fetch(s.base + '/api/docs/');
   assert.strictEqual(page.status, 200);
   assert.match(await page.text(), /swagger-ui/);
@@ -309,4 +310,95 @@ test('password reset email has the link and expiry and escapes HTML', () => {
   assert.match(mail.text, /http:\/\/localhost:3000\/\?reset=abc/);
   assert.match(mail.text, /expires in 30 minutes/);
   assert.match(mail.html, /&lt;A&gt;/);
+});
+
+// Fake AI assistant: records each request and returns a canned answer (no real API calls).
+function fakeAgent({ fails = false } = {}) {
+  const calls = [];
+  return {
+    calls,
+    run: async request => {
+      calls.push(request);
+      if (fails) throw new Error('Anthropic API is down');
+      return {
+        reply: 'USB-C Cable: 9.50 → 10.45',
+        changes: [{ id: 2, value: 10.45 }],
+        action: null,
+        toolCalls: [{ name: 'list_products', input: {} }, { name: 'set_prices', input: { changes: [{ id: 2, price: 10.45 }] } }],
+      };
+    },
+  };
+}
+const agentBody = {
+  messages: [{ role: 'user', content: 'Make everything under $20 ten percent more expensive' }],
+  products: [{ id: 1, label: 'Mouse', value: 25, savedValue: 25 }, { id: 2, label: 'USB-C Cable', value: 9.5, savedValue: 9.5 }],
+};
+
+test('AI assistant requires a valid token', async t => {
+  const agent = fakeAgent();
+  const s = await start({ agent }); t.after(s.close);
+  for (const token of [undefined, 'garbage']) {
+    assert.strictEqual((await s.call('/api/agent', { token, body: agentBody })).status, 401);
+  }
+  assert.strictEqual(agent.calls.length, 0);
+});
+
+test('AI assistant returns the reply, proposed changes and tool calls', async t => {
+  const agent = fakeAgent();
+  const s = await start({ agent }); t.after(s.close);
+  const { status, body } = await s.call('/api/agent', { token: await s.login(), body: agentBody });
+  assert.strictEqual(status, 200);
+  assert.deepStrictEqual(body, {
+    ok: true,
+    reply: 'USB-C Cable: 9.50 → 10.45',
+    changes: [{ id: 2, value: 10.45 }],
+    action: null,
+    toolCalls: [{ name: 'list_products', input: {} }, { name: 'set_prices', input: { changes: [{ id: 2, price: 10.45 }] } }],
+  });
+  assert.deepStrictEqual(agent.calls[0], agentBody);
+  assert.strictEqual(s.sent.length, 0); // nothing saved, nothing emailed
+});
+
+test('AI assistant rejects invalid requests', async t => {
+  const agent = fakeAgent();
+  const s = await start({ agent }); t.after(s.close);
+  const token = await s.login();
+  const user = { role: 'user', content: 'hi' };
+  const product = { id: 1, label: 'Mouse', value: 25, savedValue: 25 };
+  for (const bad of [
+    {},
+    { messages: [], products: [product] },
+    { messages: [user], products: [] },
+    { messages: [user] },
+    { messages: [{ role: 'system', content: 'hi' }], products: [product] },
+    { messages: [user, { role: 'assistant', content: 'hello' }], products: [product] },
+    { messages: [{ role: 'user', content: '   ' }], products: [product] },
+    { messages: [{ role: 'user', content: 'x'.repeat(2001) }], products: [product] },
+    { messages: [{ role: 'user', content: 5 }], products: [product] },
+    { messages: Array(21).fill(user), products: [product] },
+    { messages: [user], products: [{ ...product, id: 'x' }] },
+    { messages: [user], products: [{ ...product, value: 'cheap' }] },
+    { messages: [user], products: [{ ...product, value: null }] },
+    { messages: [user], products: [product, product] },
+    { messages: [user], products: Array.from({ length: 501 }, (_, i) => ({ id: i, value: 1 })) },
+  ]) {
+    const { status, body } = await s.call('/api/agent', { token, body: bad });
+    assert.strictEqual(status, 400, JSON.stringify(bad).slice(0, 200));
+    assert.strictEqual(body.ok, false);
+  }
+  assert.strictEqual(agent.calls.length, 0);
+});
+
+test('AI assistant returns 503 when it is not configured', async t => {
+  const s = await start(); t.after(s.close);
+  const { status, body } = await s.call('/api/agent', { token: await s.login(), body: agentBody });
+  assert.strictEqual(status, 503);
+  assert.deepStrictEqual(body, { ok: false, error: 'AI assistant is not configured on the server' });
+});
+
+test('AI assistant failure returns 500 without the internal error', async t => {
+  const s = await start({ agent: fakeAgent({ fails: true }) }); t.after(s.close);
+  const { status, body } = await s.call('/api/agent', { token: await s.login(), body: agentBody });
+  assert.strictEqual(status, 500);
+  assert.deepStrictEqual(body, { ok: false, error: 'AI assistant failed' });
 });

@@ -14,7 +14,7 @@ const options = {
   scales: { y: { beginAtZero: true, title: { display: true, text: 'Price' } } },
 };
 
-export default function ChartPanel({ working, savedById, changedIds, dirty, saving, emailTo, onSave, onDiscard }) {
+export default function ChartPanel({ working, savedById, changedIds, dirty, saving, busy, emailTo, onSave, onDiscard }) {
   const data = {
     labels: working.map(d => d.label),
     datasets: [{
@@ -30,8 +30,8 @@ export default function ChartPanel({ working, savedById, changedIds, dirty, savi
       <div className="panel-head">
         <h2>Product Prices</h2>
         <div className="actions">
-          <button className="secondary" disabled={!dirty || saving} onClick={onDiscard}>Discard changes</button>
-          <button disabled={!dirty || saving} onClick={onSave} title={`A summary email will be sent to ${emailTo}`}>
+          <button className="secondary" disabled={!dirty || saving || busy} onClick={onDiscard}>Discard changes</button>
+          <button disabled={!dirty || saving || busy} onClick={onSave} title={`A summary email will be sent to ${emailTo}`}>
             {saving ? 'Saving…' : 'Save data'}
           </button>
         </div>

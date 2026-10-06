@@ -7,7 +7,8 @@ export const HELP_TEXT = `I can change product prices for you. Use any part of a
 • show                      (list current prices)
 • undo                      (revert the last change)
 • discard                   (revert to saved prices)
-• save                      (write changes to the database)`;
+• save                      (write changes to the database)
+• Or just ask in plain English, e.g. 'raise everything under 20 by 10%'`;
 
 export const MAX_PRICE = 99999999.99; // dbo.Products.Price is decimal(10,2)
 
@@ -27,6 +28,7 @@ const round2 = v => Math.round(v * 100) / 100;
 export function fmt(v) { return v.toFixed(2); }
 
 // Returns { data, reply, action? } — data is a new array if changed, otherwise the same reference.
+// `unknown: true` means no command matched, so the dashboard can pass the text to the AI assistant.
 export function runCommand(input, data) {
   const text = input.trim().replace(/\s+/g, ' ');
   const lower = text.toLowerCase();
@@ -78,5 +80,5 @@ export function runCommand(input, data) {
     return applyPrice(found.i, round2(old + sign * delta));
   }
 
-  return { data, reply: `Sorry, I didn't understand that. Type "help" to see what I can do.`, error: true };
+  return { data, reply: `Sorry, I didn't understand that. Type "help" to see what I can do.`, error: true, unknown: true };
 }

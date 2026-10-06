@@ -13,7 +13,7 @@ module.exports = {
       + 'click **Authorize** and paste it in.\n\n'
       + '⚠️ **POST /api/products/save** changes real prices in the database and sends an email.',
   },
-  tags: [{ name: 'Auth' }, { name: 'Products' }],
+  tags: [{ name: 'Auth' }, { name: 'Products' }, { name: 'AI assistant' }],
   components: {
     securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
     schemas: {
@@ -295,6 +295,94 @@ module.exports = {
           },
           400: error('Invalid request, or a product no longer exists'),
           401: error('Missing, invalid or expired token'),
+        },
+      },
+    },
+    '/api/agent': {
+      post: {
+        tags: ['AI assistant'],
+        summary: 'Ask the AI assistant (Claude) a question or for price changes',
+        description: 'Send the chat so far and the prices currently shown in the browser. The assistant only **proposes** changes '
+          + '(`changes`, final price per product id) and may ask the dashboard to `save`, `discard` or `undo` (`action`). '
+          + 'Nothing is written to the database by this endpoint. Returns 503 when `ANTHROPIC_API_KEY` is not set on the server.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['messages', 'products'],
+                properties: {
+                  messages: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 20,
+                    description: 'Plain-text chat turns, oldest first. The last one must be from the user.',
+                    items: {
+                      type: 'object',
+                      required: ['role', 'content'],
+                      properties: {
+                        role: { type: 'string', enum: ['user', 'assistant'] },
+                        content: { type: 'string', minLength: 1, maxLength: 2000, example: 'Make everything under $20 ten percent more expensive' },
+                      },
+                    },
+                  },
+                  products: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 500,
+                    description: 'Prices currently shown in the browser (including unsaved changes).',
+                    items: {
+                      type: 'object',
+                      required: ['id', 'value'],
+                      properties: {
+                        id: { type: 'integer', example: 16 },
+                        label: { type: 'string', example: 'USB-C Charging Cable 2m' },
+                        value: { type: 'number', description: 'Price on screen', example: 9.5 },
+                        savedValue: { type: 'number', description: 'Price in the database', example: 9.5 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Assistant reply and proposed changes',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok: { type: 'boolean', example: true },
+                    reply: { type: 'string', example: 'USB-C Charging Cable 2m: 9.50 → 10.45' },
+                    changes: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: { id: { type: 'integer', example: 16 }, value: { type: 'number', example: 10.45 } },
+                      },
+                    },
+                    action: { type: 'string', enum: ['save', 'discard', 'undo'], nullable: true },
+                    toolCalls: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: { name: { type: 'string', example: 'set_prices' }, input: { type: 'object' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: error('Invalid messages or products'),
+          401: error('Missing, invalid or expired token'),
+          500: error('The AI assistant failed'),
+          503: error('AI assistant is not configured on the server'),
         },
       },
     },

@@ -79,13 +79,20 @@ tr.changed td { color: var(--changed); font-weight: 600; }
 .msg.bot { background: #eef2f8; align-self: flex-start; }
 .msg.user { background: var(--accent); color: #fff; align-self: flex-end; }
 .msg.error { background: #fdecec; color: #b42318; }
+.msg.thinking { color: var(--muted); font-style: italic; animation: pulse 1.4s ease-in-out infinite; }
+.msg-tools { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.75rem; overflow-wrap: anywhere; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .msg.thinking { animation: none; } }
 
 .chat-form { display: flex; gap: 8px; margin-top: 12px; }
-.chat-input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+.chat-input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+.chat-input:disabled { background: var(--bg); }
 
 @media (max-width: 860px) {
   main { grid-template-columns: 1fr; padding: 16px; }
   .chat-panel { height: 480px; }
+  .msg { max-width: 95%; }
+  .chat-input { font-size: 16px; } /* stops iOS zooming in on focus */
 }
 
 .flag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e3f5ea; color: var(--ok); font-size: 0.8rem; font-weight: 600; }

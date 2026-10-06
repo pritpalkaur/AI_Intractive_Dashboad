@@ -46,6 +46,41 @@ function validatePassword(password) {
   return password;
 }
 
+const MAX_AGENT_MESSAGES = 20;
+const MAX_AGENT_MESSAGE_LENGTH = 2000;
+const MAX_AGENT_PRODUCTS = 500;
+
+// Throws a ValidationError for the first problem with a POST /api/agent body.
+// Returns the normalized { messages: [{ role, content }], products: [{ id, label, value, savedValue }] }.
+function validateAgentRequest(body) {
+  const messages = body?.messages;
+  if (!Array.isArray(messages) || messages.length === 0) throw new ValidationError('Messages must be a non-empty array');
+  if (messages.length > MAX_AGENT_MESSAGES) throw new ValidationError(`At most ${MAX_AGENT_MESSAGES} messages are allowed`);
+  const normalizedMessages = messages.map(m => {
+    if (m?.role !== 'user' && m?.role !== 'assistant') throw new ValidationError('Every message role must be "user" or "assistant"');
+    if (typeof m.content !== 'string' || !m.content.trim()) throw new ValidationError('Every message needs some text');
+    if (m.content.length > MAX_AGENT_MESSAGE_LENGTH) throw new ValidationError(`Messages must be at most ${MAX_AGENT_MESSAGE_LENGTH} characters`);
+    return { role: m.role, content: m.content };
+  });
+  if (normalizedMessages[normalizedMessages.length - 1].role !== 'user') throw new ValidationError('The last message must be from the user');
+
+  const products = body.products;
+  if (!Array.isArray(products) || products.length === 0) throw new ValidationError('Products must be a non-empty array');
+  if (products.length > MAX_AGENT_PRODUCTS) throw new ValidationError(`At most ${MAX_AGENT_PRODUCTS} products are allowed`);
+  const seen = new Set();
+  const isPrice = v => typeof v === 'number' && Number.isFinite(v);
+  const normalizedProducts = products.map(p => {
+    if (!Number.isInteger(p?.id)) throw new ValidationError('Every product needs a numeric id');
+    if (seen.has(p.id)) throw new ValidationError(`Product id ${p.id} appears more than once`);
+    seen.add(p.id);
+    if (!isPrice(p.value)) throw new ValidationError(`Invalid price for product id ${p.id}`);
+    if (p.savedValue !== undefined && !isPrice(p.savedValue)) throw new ValidationError(`Invalid saved price for product id ${p.id}`);
+    return { id: p.id, label: String(p.label ?? p.id).slice(0, 200), value: p.value, savedValue: p.savedValue ?? p.value };
+  });
+
+  return { messages: normalizedMessages, products: normalizedProducts };
+}
+
 module.exports = {
-  validateSaveRequest, validateNewUser, validatePassword, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE,
+  validateSaveRequest, validateNewUser, validatePassword, validateAgentRequest, ValidationError, normalizeEmail, isValidEmail, MAX_PRICE,
 };
